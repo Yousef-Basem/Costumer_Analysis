@@ -10,7 +10,7 @@ BASE_DIR = Path(__file__).resolve().parent
 st.set_page_config(page_title="Telco Churn Predictor", layout="wide")
 
 st.title("📡 Telco Customer Churn — Prediction App")
-st.markdown("Enter customer details to get predictions from 3 pre-trained models.")
+st.markdown("Enter customer details to get predictions from 2 pre-trained models.")
 st.markdown("---")
 
 # ── Load pre-trained models (trained once, in the notebook) ─────────────────
@@ -18,11 +18,9 @@ st.markdown("---")
 MODEL_FILES = {
     "log_model": BASE_DIR / "log_model.pkl",
     "lr_tc": BASE_DIR / "lr_tc.pkl",
-    "lr_tn": BASE_DIR / "lr_tn.pkl",
     "sc_cls": BASE_DIR / "sc_cls.pkl",
     "sc_target": BASE_DIR / "sc_target.pkl",
     "sc_tc": BASE_DIR / "sc_tc.pkl",
-    "sc_tn": BASE_DIR / "sc_tn.pkl",
 }
 
 @st.cache_resource
@@ -58,10 +56,8 @@ def load_reference_data(_sc_target):
 models = load_models()
 log_model = models["log_model"]
 lr_tc     = models["lr_tc"]
-lr_tn     = models["lr_tn"]
 sc_cls    = models["sc_cls"]
 sc_tc     = models["sc_tc"]
-sc_tn     = models["sc_tn"]
 sc_target = models["sc_target"]
 
 df_ref = load_reference_data(sc_target)
@@ -91,7 +87,6 @@ ALL_COLUMNS = [
 
 CLS_COLS = [c for c in ALL_COLUMNS if c != 'Churn']
 TC_COLS  = [c for c in ALL_COLUMNS if c != 'TotalCharges']
-TN_COLS  = [c for c in ALL_COLUMNS if c != 'tenure']
 
 # ── Sidebar Inputs ────────────────────────────────────────────────────────────
 st.sidebar.header("👤 Customer Profile")
@@ -178,16 +173,6 @@ def unscale_total_charges(tc_pred_scaled, tenure_real, monthly_real):
     return real[TOTAL_IDX]
 
 
-def unscale_tenure(tn_pred_scaled, monthly_real, total_real):
-    """Convert a scaled tenure prediction back to real months."""
-    scaled_inputs = sc_target.transform([[0, monthly_real, total_real]])[0]
-    monthly_scaled = scaled_inputs[MONTHLY_IDX]
-    total_scaled = scaled_inputs[TOTAL_IDX]
-    row = [tn_pred_scaled, monthly_scaled, total_scaled]
-    real = sc_target.inverse_transform([row])[0]
-    return real[TENURE_IDX]
-
-
 # ── Predictions ───────────────────────────────────────────────────────────────
 if not predict_clicked and "has_predicted" not in st.session_state:
     st.info("Set the customer profile in the sidebar, then click **Predict**.")
@@ -208,15 +193,10 @@ X_tc_scaled = sc_tc.transform(X_tc_input)
 tc_pred_scaled = lr_tc.predict(X_tc_scaled)[0]
 tc_real = unscale_total_charges(tc_pred_scaled, tenure, monthly_charges)
 
-X_tn_input = input_df[TN_COLS]
-X_tn_scaled = sc_tn.transform(X_tn_input)
-tn_pred_scaled = lr_tn.predict(X_tn_scaled)[0]
-tn_real = unscale_tenure(tn_pred_scaled, monthly_charges, total_charges)
-
 # ── Results Section ───────────────────────────────────────────────────────────
 st.subheader("🔮 Prediction Results")
 
-col1, col2, col3 = st.columns(3)
+col1, col2 = st.columns(2)
 
 with col1:
     churn_label = "🔴 Will Churn" if churn_pred == 1 else "🟢 Will NOT Churn"
@@ -230,17 +210,12 @@ with col2:
         "Model 2 — Total Charges", f"${max(tc_real, 0):,.0f}", "Predicted lifetime spend", "#1e88e5"
     )
 
-with col3:
-    render_card(
-        "Model 3 — Tenure", f"{max(tn_real, 0):.0f} months", "Predicted months with company", "#ff9800"
-    )
-
 st.markdown("---")
 
 # ── Charts Section ────────────────────────────────────────────────────────────
 st.subheader("📊 Visual Analysis")
 
-chart1, chart2, chart3 = st.columns(3)
+chart1, chart2 = st.columns(2)
 
 with chart1:
     st.markdown("**Churn Probability**")
@@ -263,18 +238,6 @@ with chart2:
     ax.axvline(monthly_charges, color='darkred', linewidth=2, linestyle='--', label='This Customer')
     ax.set_title("Monthly Charges Distribution")
     ax.set_xlabel("Monthly Charges ($)")
-    ax.set_ylabel("Count")
-    ax.legend()
-    st.pyplot(fig)
-    plt.close(fig)
-
-with chart3:
-    st.markdown("**Predicted Tenure vs Dataset**")
-    fig, ax = plt.subplots(figsize=(4, 4))
-    ax.hist(df_ref['tenure_real'], bins=30, color='steelblue', alpha=0.7, label='All Customers')
-    ax.axvline(max(tn_real, 0), color='darkred', linewidth=2, linestyle='--', label='Predicted')
-    ax.set_title("Tenure Distribution")
-    ax.set_xlabel("Tenure (months)")
     ax.set_ylabel("Count")
     ax.legend()
     st.pyplot(fig)
